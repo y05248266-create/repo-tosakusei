@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>レポート作成サイト</title>
+<!-- QRコード生成ライブラリ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=M+PLUS+Rounded+1c:wght@500;800&family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@500;700&family=Yuji+Syuku&display=swap" rel="stylesheet">
+
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; display:flex; font-family:'Segoe UI', Meiryo, sans-serif; height:100vh; background:#0f172a; color:#f8fafc; overflow:hidden; position:relative; }
+  
+  /* サイドバー開閉トグルボタン */
+  #sidebarToggleBtn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 100;
+    width: auto;
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: #fff;
+    border: 1px solid #60a5fa;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    transition: left 0.3s ease;
+  }
+  #sidebarToggleBtn:hover { background: #2563eb; }
+
+  /* サイドバー */
+  #tools { 
+    width:320px; 
+    background:#1e293b; 
+    color:#f8fafc; 
+    padding:45px 15px 15px 15px; 
+    overflow-y:auto; 
+    box-shadow:2px 0 10px rgba(0,0,0,0.3); 
+    z-index:10; 
+    display:flex; 
+    flex-direction:column; 
+    justify-content:space-between;
+    transition: margin-left 0.3s ease;
+    flex-shrink: 0;
+  }
+  body.sidebar-closed #tools {
+    margin-left: -320px;
+  }
+
+  .tools-content { flex:1; }
+
+  /* 説明書ボタン */
+  .btn-help {
+    background: #0284c7 !important;
+    color: #ffffff !important;
+    font-weight: bold;
+    margin-bottom: 12px;
+    border: 1px solid #38bdf8 !important;
+  }
+  .btn-help:hover { background: #0369a1 !important; }
+
+  /* UIグループ */
+  .ui-group { 
+    background:#334155; 
+    border:1px solid #475569; 
+    border-radius:8px; 
+    margin-bottom:12px; 
+    overflow: hidden;
+  }
+  .ui-group h3 { 
+    margin:0; 
+    font-size:14px; 
+    color:#38bdf8; 
+    padding:10px 12px; 
+    cursor:pointer;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    user-select:none;
+    background:#2d3748;
+    transition: background 0.2s;
+  }
+  .ui-group h3:hover { background:#3b4a61; }
+  .ui-group h3::after { content: '▲'; font-size: 10px; transition: transform 0.2s; }
+  .ui-group.collapsed h3::after { transform: rotate(180deg); }
+  .ui-group-content { padding:12px; border-top:1px solid #475569; }
+  .ui-group.collapsed .ui-group-content { display: none; }
+  
+  .btn-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  button, input, select { width:100%; padding:8px; margin:2px 0; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#fff; font-size:13px; cursor:pointer; transition:0.2s; }
+  button:hover:not(:disabled) { background:#3b82f6; border-color:#60a5fa; }
+  button.active { background:#2563eb; font-weight:bold; }
+  
+  /* ボタン無効化スタイル */
+  button:disabled, select:disabled, input:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    background: #1e293b !important;
+    border-color: #334155 !important;
+  }
+
+  label { font-size:12px; color:#cbd5e1; display:block; margin-top:6px; }
+
+  /* 生徒情報未入力のアラート注意書き */
+  #infoNotice {
+    background: #f59e0b;
+    color: #000;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 6px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+
+  /* ワークエリア */
+  #work { flex:1; background:#0f172a; padding:20px; overflow:auto; display:flex; justify-content:center; align-items:flex-start; touch-action:auto; }
+  
+  /* ピンチ拡大用のラッパー */
+  #zoomWrapper { transform-origin: top center; transition: transform 0.05s ease-out; }
+
+  /* キャンバス */
+  #canvas { position:relative; width:794px; height:1123px; background:#ffffff; margin:auto; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.5); overflow:hidden; }
+  
+  /* 固定表示ヘッダー */
+  #fixedHeader {
+    position: absolute;
+    top: 20px;
+    right: 25px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #000000;
+    font-family: Meiryo, sans-serif;
+    user-select: none;
+    pointer-events: none;
+    z-index: 1000;
+    text-align: right;
+    line-height: 1.2;
+  }
+
+  /* キャンバス要素 */
+  .item {
+    position:absolute;
+    border-style:none;
+    user-select:none;
+    cursor:move;
+    color:#000000;
+    background:transparent;
+    transform-origin: center center;
+    min-width:20px;
+    min-height:20px;
+    box-sizing:border-box;
+    padding: 6px;
+  }
+  .item.selected { outline:1px dashed #2563eb !important; outline-offset: 2px; }
+  
+  /* テキストエリア */
+  .item [contenteditable="true"] {
+    outline:none;
+    width:100%;
+    height:100%;
+    min-height:100%;
+    word-break:break-word;
+    overflow:hidden;
+    line-height:1.2;
+    background:transparent !important;
+    padding: 2px;
+    box-sizing: border-box;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    cursor: text !important;
+  }
+  
+  .item img { width:100%; height:100%; object-fit:contain; pointer-events:none; -webkit-user-drag: none; display:block; }
+  .item svg { width:100%; height:100%; display:block; pointer-events:none; }
+
+  /* アイコンフォント指定 */
+  .icon-card, .item.icon-item, .icon-content {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif !important;
+  }
+  .item.icon-item { display:flex; align-items:center; justify-content:center; line-height:1; overflow:hidden; }
+  .item.icon-item .icon-content { display:flex; align-items:center; justify-content:center; width:100%; height:100%; line-height:1; font-style:normal; }
+
+  .vertical-text { writing-mode: vertical-rl; text-orientation: upright; }
+
+  /* ハンドル仕様 */
+  .rotate-handle {
+    display:none; position:absolute; right:-12px; top:-12px; width:24px; height:24px;
+    background:#38bdf8; color:#000; border:1px solid #fff; border-radius:50%;
+    font-size:12px; text-align:center; line-height:22px; cursor:grab; z-index:100; font-weight:bold; touch-action:none;
+  }
+
+  .resize-handle {
+    display:none; position:absolute; right:-12px; bottom:-12px; width:24px; height:24px;
+    background:#2563eb; color:#ffffff; border:2px solid #fff; border-radius:50%;
+    font-size:16px; font-weight:bold; text-align:center; line-height:20px; cursor:se-resize; z-index:100; touch-action:none;
+    user-select:none;
+  }
+  .resize-handle::after { content: '＋'; }
+
+  .move-handle {
+    display:none; position:absolute; right:-12px; top:50%; transform:translateY(-50%); width:22px; height:22px;
+    background:#38bdf8; color:#000000; border:1px solid #fff; border-radius:4px;
+    font-size:12px; font-weight:bold; text-align:center; line-height:20px; cursor:move; z-index:99; touch-action:none;
+    user-select:none; opacity: 0.9;
+  }
+  .move-handle::after { content: '□'; }
+
+  .item.selected .resize-handle, 
+  .item.selected .move-handle, 
+  .item.selected .rotate-handle { display:block; }
+  
+  /* モーダル */
+  .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(3px); z-index:1000; }
+  .panel { background:#1e293b; color:#fff; width:800px; height:620px; margin:20px auto; padding:20px; border-radius:12px; border:1px solid #475569; display:flex; flex-direction:column; }
+  .tab-menu { display:flex; gap:6px; border-bottom:1px solid #475569; padding-bottom:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .tab-btn { background:#334155; border:none; padding:6px 10px; border-radius:6px; color:#fff; cursor:pointer; width:auto; font-size:12px; }
+  .tab-btn.active { background:#3b82f6; }
+  .icon-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(48px, 1fr)); gap:8px; overflow-y:auto; flex:1; padding:4px; }
+  .icon-card { display:flex; align-items:center; justify-content:center; font-size:24px; background:#334155; border-radius:8px; height:48px; cursor:pointer; transition:0.2s; border:1px solid transparent; }
+  .icon-card:hover { background:#475569; border-color:#38bdf8; transform:scale(1.1); }
+  
+  .code-container { flex:1; display:flex; flex-direction:column; gap:10px; overflow:hidden; }
+  .code-block { flex:1; background:#0f172a; color:#38bdf8; border:1px solid #475569; border-radius:6px; padding:12px; font-family:monospace; font-size:12px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+
+  .bar { height:4px; border-radius:2px; margin-top:2px; }
+
+  .btn-code-view {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+    font-size: 14px !important;
+    padding: 12px !important;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+    margin-top: 15px !important;
+  }
+
+  /* 印刷用スタイル（PDF出力最適化） */
+  @media print {
+    @page { margin: 0; size: A4 portrait; }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      width: 100% !important;
+      height: 100% !important;
+      overflow: visible !important;
+    }
+    #tools, #sidebarToggleBtn, .modal { display: none !important; }
+    #work {
+      padding: 0 !important;
+      margin: 0 !important;
+      background: none !important;
+      display: block !important;
+      overflow: visible !important;
+    }
+    #zoomWrapper {
+      transform: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    #canvas {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .resize-handle, .move-handle, .rotate-handle { display: none !important; }
+    .item.selected { outline: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- サイドバー開閉ボタン -->
+<button id="sidebarToggleBtn" onclick="toggleSidebar()">◀ サイドバーを閉じる</button>
+
+<!-- サイドバー -->
+<div id="tools">
+  <div class="tools-content">
+    <h2 style="font-size:17px; margin-top:0; color:#38bdf8;">レポート作成サイト</h2>
+    
+    <!-- 説明書ボタン -->
+    <button class="btn-help" onclick="showHelpModal()">📖 使い方説明書</button>
+
+    <!-- 生徒情報未入力時の注意メッセージ -->
+    <div id="infoNotice">⚠️ 学年・組・番号・氏名を入力すると操作できます</div>
+
+    <!-- 1. 生徒情報 -->
+    <div class="ui-group" style="border: 1px solid #38bdf8;">
+      <h3 onclick="toggleAccordion(this)">👤 生徒情報（必須）</h3>
+      <div class="ui-group-content">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px;">
+          <div>
+            <label>学年</label>
+            <input type="number" id="studentGrade" min="1" max="9" placeholder="2" oninput="onStudentInfoChange()">
+          </div>
+          <div>
+            <label>組</label>
+            <input type="number" id="studentClassNum" min="1" max="20" placeholder="1" oninput="onStudentInfoChange()">
+          </div>
+          <div>
+            <label>出席番号</label>
+            <input type="number" id="studentNumber" min="1" max="50" placeholder="15" oninput="onStudentInfoChange()">
+          </div>
+        </div>
+        <label>氏名</label>
+        <input type="text" id="studentName" placeholder="山田 太郎" oninput="onStudentInfoChange()">
+      </div>
+    </div>
+
+    <!-- 2. 操作 -->
+    <div class="ui-group">
+      <h3 onclick="toggleAccordion(this)">操作</h3>
+      <div class="ui-group-content">
+        <div class="btn-grid">
+          <button class="req-info" onclick="undo()">↶ 戻る</button>
+          <button class="req-info" onclick="redo()">↷ 進む</button>
+        </div>
+        <button class="req-info" onclick="clearAllCanvas()" style="background:#dc2626; margin-top:6px; font-weight:bold;">🗑️ 全部削除</button>
+      </div>
+    </div>
+
+    <!-- 3. パーツ追加 -->
+    <div class="ui-group">
+      <h3 onclick="toggleAccordion(this)">パーツ追加</h3>
+      <div class="ui-group-content">
+        <div class="btn-grid">
+          <button class="req-info" onclick="addTitle()">タイトル</button>
+          <button class="req-info" onclick="addText()">文章(横)</button>
+          <button class="req-info" onclick="addTextV()">文章(縦)</button>
+          <button class="req-info" onclick="addBox()">四角形</button>
+          <button class="req-info" onclick="addCircle()">円</button>
+          <button class="req-info" onclick="addLine()">線 (直線)</button>
+          <button class="req-info" onclick="showIcons()">アイコン</button>
+          <button class="req-info" onclick="addQR()">QRコード</button>
+        </div>
+        <!-- 画像検索 & 画像の貼り方ボタン -->
+        <div style="margin-top:8px; border-top:1px solid #475569; padding-top:8px;">
+          <button class="req-info" onclick="openGoogleImageSearch()" style="background:#0284c7; font-weight:bold;">🔍 画像検索 (Google)</button>
+          <button class="req-info" onclick="showImageHowToModal()" style="background:#10b981; font-weight:bold; margin-top:4px;">🖼️ 画像の貼り方</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. スタイル＆書式 -->
+    <div class="ui-group">
+      <h3 onclick="toggleAccordion(this)">スタイル & 書式</h3>
+      <div class="ui-group-content">
+        <label>フォント</label>
+        <select id="fontSelect" class="req-info" onchange="applyStyle()">
+          <option value="'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif">角ゴシック体（標準・くっきり）</option>
+          <option value="'M PLUS Rounded 1c', 'Kosugi Maru', sans-serif">丸ゴシック体（まるみ・やわらかい）</option>
+          <option value="'Noto Serif JP', 'Yu Mincho', serif">明朝体（高級感・和風）</option>
+          <option value="'Yuji Syuku', serif">毛筆・筆文字風（力強い）</option>
+          <option value="'Comic Sans MS', cursive, sans-serif">POP・ポップ体（英語・ポップ）</option>
+          <option value="monospace">等幅 ( Monospace / プログラミング )</option>
+        </select>
+        
+        <label>文字 / アイコンサイズ (px)</label>
+        <input id="fs" class="req-info" type="number" min="8" value="48" onchange="applyStyle()" oninput="applyStyle()">
+        
+        <label>文字装飾</label>
+        <div class="btn-grid">
+          <button id="boldBtn" class="req-info" onclick="toggleBold()"><b>B (太字)</b></button>
+          <button class="req-info" onclick="toggleDecoration('underline')"><u>下線</u></button>
+          <button class="req-info" onclick="toggleDecoration('double')"><u>＝ 二重下線</u></button>
+          <button class="req-info" onclick="toggleDecoration('wavy')">波線</button>
+        </div>
+        
+        <label>テキスト揃え</label>
+        <div class="btn-grid">
+          <button class="req-info" onclick="alignT('left')">左</button>
+          <button class="req-info" onclick="alignT('center')">中央</button>
+          <button class="req-info" onclick="alignT('right')">右</button>
+        </div>
+
+        <label>文字色 / アイコン色</label>
+        <input id="tc" class="req-info" type="color" value="#000000" onchange="applyStyle()"><div id="tbar" class="bar"></div>
+
+        <label>枠線スタイル</label>
+        <select id="borderStyleSelect" class="req-info" onchange="onBorderStyleChange()">
+          <option value="none">なし（透明）</option>
+          <option value="solid">一重線 (solid)</option>
+          <option value="double">二重線 (double)</option>
+          <option value="dashed">破線 (dashed)</option>
+          <option value="dotted">点線 (dotted)</option>
+          <option value="groove">凹線 (groove)</option>
+          <option value="ridge">凸線 (ridge)</option>
+        </select>
+
+        <label>枠線の太さ (px)</label>
+        <input id="borderWidthInput" class="req-info" type="number" min="1" max="50" value="4" onchange="applyStyle()" oninput="applyStyle()">
+        
+        <label>枠色 / 線色</label>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input id="bc" class="req-info" type="color" value="#000000" onchange="onBorderColorChange()">
+          <button class="req-info" onclick="setBorderTransparent()" style="width:70px; margin:0; padding:6px 2px; font-size:11px;">透明</button>
+        </div>
+        <div id="bbar" class="bar"></div>
+
+        <label>背景色</label>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input id="bg" class="req-info" type="color" value="#ffffff" onchange="onBgColorChange()">
+          <button class="req-info" onclick="setBgTransparent()" style="width:70px; margin:0; padding:6px 2px; font-size:11px;">透明</button>
+        </div>
+        <div id="gbar" class="bar"></div>
+      </div>
+    </div>
+
+    <!-- 5. 配置＆編集 -->
+    <div class="ui-group">
+      <h3 onclick="toggleAccordion(this)">配置 & 編集</h3>
+      <div class="ui-group-content">
+        <div class="btn-grid">
+          <button class="req-info" onclick="front()">前面へ</button>
+          <button class="req-info" onclick="back()">背面へ</button>
+          <button class="req-info" onclick="copyE()">複製</button>
+          <button class="req-info" onclick="delE()" style="background:#ef4444;">削除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. 要素の大きさ -->
+    <div class="ui-group">
+      <h3 onclick="toggleAccordion(this)">要素の大きさ (幅 / 高さ)</h3>
+      <div class="ui-group-content">
+        <div class="btn-grid">
+          <div>
+            <label>幅 (px)</label>
+            <input id="elemWidth" class="req-info" type="number" min="1" onchange="applySize()" oninput="applySize()" placeholder="自動">
+          </div>
+          <div>
+            <label>高さ (px)</label>
+            <input id="elemHeight" class="req-info" type="number" min="1" onchange="applySize()" oninput="applySize()" placeholder="自動">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. 保存＆書き出し -->
+    <div class="ui-group">
+      <h3 onclick="toggleAccordion(this)">保存 & 書き出し</h3>
+      <div class="ui-group-content">
+        <button class="req-info" onclick="pdfOut()" style="background:#e11d48; font-weight:bold;">🖨️ PDF保存 (印刷ダイアログ)</button>
+        <button class="req-info" onclick="showOtherSaveModal()" style="margin-top:6px; background:#475569; font-weight:bold;">📁 その他の保存方法</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. プログラミングコード表示 -->
+  <div>
+    <button class="btn-code-view req-info" onclick="showCodeModal()">💻 プログラミング（コード）を表示</button>
+  </div>
+</div>
+
+<!-- ワークエリア -->
+<div id="work">
+  <div id="zoomWrapper">
+    <div id="canvas">
+      <div id="fixedHeader"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 使い方説明書モーダル -->
+<div id="helpModal" class="modal">
+  <div class="panel" style="max-width:650px; height:auto; max-height:85vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #475569; padding-bottom:8px;">
+      <h3 style="margin:0; color:#38bdf8;">📖 レポート作成サイトの使い方ガイド</h3>
+      <button onclick="hideHelpModal()" style="width:auto; padding:4px 12px;">✕ 閉じる</button>
+    </div>
+    <div style="font-size:13px; line-height:1.6; color:#e2e8f0;">
+      <p style="margin-top:0;"><strong>1. 生徒情報の入力（必須）</strong><br>
+      ・最初に学年・組・出席番号・氏名を入力してください。入力が完了するとツールが使えるようになります。</p>
+
+      <p><strong>2. 基本操作</strong><br>
+      ・「パーツ追加」メニューからタイトルや文章、図形、アイコンを選択してキャンバスに追加します。<br>
+      ・キャンバス上のパーツをクリックして選択すると、自由にドラッグ＆ドロップで位置を移動できます。</p>
+
+      <p><strong>3. パーツの変形・操作（丸いボタン）</strong><br>
+      ・<span style="color:#38bdf8; font-weight:bold;">右上 (↻)</span>：回転<br>
+      ・<span style="color:#38bdf8; font-weight:bold;">右中央 (□)</span>：移動<br>
+      ・<span style="color:#2563eb; font-weight:bold;">右下 (＋)</span>：拡大・縮小</p>
+
+      <p><strong>4. パーツの削除 & 全部削除</strong><br>
+      ・選択したパーツは [Delete] キーや「削除」ボタンで消せます。<br>
+      ・「🗑️ 全部削除」ボタンを押すと、初期状態（タイトルと文章）にリセットできます。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 画像の貼り方案内モーダル -->
+<div id="imageHowToModal" class="modal">
+  <div class="panel" style="max-width:550px; height:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #475569; padding-bottom:8px;">
+      <h3 style="margin:0; color:#10b981;">🖼️ 画像の貼り方手順</h3>
+      <button onclick="hideImageHowToModal()" style="width:auto; padding:4px 12px;">✕ 閉じる</button>
+    </div>
+    <div style="font-size:14px; line-height:1.8; color:#f8fafc;">
+      <ol style="padding-left:20px; margin:0;">
+        <li style="margin-bottom:10px;">
+          <strong>「🔍 画像検索 (Google)」</strong>ボタンを押して、好きな画像を検索します。
+        </li>
+        <li style="margin-bottom:10px;">
+          貼りたい画像の上に矢印をあわせ、<strong>タッチパッド（マウスパッド）の右下を押して</strong>、「<strong>画像をコピー</strong>」を選びます。
+        </li>
+        <li style="margin-bottom:10px;">
+          この画面に戻り、画像を貼りたい場所（白い紙の上）で<strong>タッチパッドの右下を押して</strong>、「<strong>貼り付け</strong>」を選びます。
+        </li>
+      </ol>
+    </div>
+    <div style="margin-top:15px; text-align:right;">
+      <button onclick="hideImageHowToModal()" style="width:auto; padding:8px 20px; background:#3b82f6;">分かりました</button>
+    </div>
+  </div>
+</div>
+
+<!-- その他の保存方法モーダル -->
+<div id="otherSaveModal" class="modal">
+  <div class="panel" style="max-width:500px; height:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #475569; padding-bottom:8px;">
+      <h3 style="margin:0; color:#38bdf8;">📁 その他の保存・読み込み方法</h3>
+      <button onclick="hideOtherSaveModal()" style="width:auto; padding:4px 12px;">✕ 閉じる</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px; padding:10px 0;">
+      <div>
+        <label style="margin-bottom:4px;">プロジェクトファイル (.hpb)</label>
+        <button onclick="saveToFile(); hideOtherSaveModal();">名前を付けて保存</button>
+        <input type="file" id="loadFileInput" onchange="loadFromFile(event); hideOtherSaveModal();" accept=".hpb,.html,.txt" style="display:none;">
+        <button onclick="document.getElementById('loadFileInput').click()" style="margin-top:4px;">ファイルから読み込み</button>
+      </div>
+      <div style="border-top:1px solid #475569; padding-top:10px;">
+        <label style="margin-bottom:4px;">Webページ用書き出し</label>
+        <button onclick="downloadHTML(); hideOtherSaveModal();" style="background:#10b981; font-weight:bold;">📄 HTMLファイルダウンロード</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- アイコン選択モーダル -->
+<div id="iconModal" class="modal">
+  <div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h3 style="margin:0;">アイコンライブラリ</h3>
+      <button onclick="hideIcons()" style="width:auto; padding:4px 12px;">✕ 閉じる</button>
+    </div>
+    <div class="tab-menu">
+      <button class="tab-btn active" onclick="filterIcons('all', this)">すべて</button>
+      <button class="tab-btn" onclick="filterIcons('basic', this)">基本・UI</button>
+      <button class="tab-btn" onclick="filterIcons('web', this)">WEB・通信</button>
+      <button class="tab-btn" onclick="filterIcons('biz', this)">ビジネス</button>
+      <button class="tab-btn" onclick="filterIcons('nature', this)">自然・フード</button>
+      <button class="tab-btn" onclick="filterIcons('vehicle', this)">乗り物・建物</button>
+      <button class="tab-btn" onclick="filterIcons('symbol', this)">記号・矢印</button>
+      <button class="tab-btn" onclick="filterIcons('face', this)">人物・感情</button>
+      <button class="tab-btn" onclick="filterIcons('sport', this)">スポーツ・趣味</button>
+    </div>
+    <div id="iconArea" class="icon-grid"></div>
+  </div>
+</div>
+
+<!-- プログラミング表示モーダル -->
+<div id="codeModal" class="modal">
+  <div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h3 style="margin:0; color:#10b981;">💻 作成したページのプログラム（HTML/CSS）</h3>
+      <button onclick="hideCodeModal()" style="width:auto; padding:4px 12px;">✕ 閉じる</button>
+    </div>
+    <p style="font-size:12px; color:#cbd5e1; margin:0 0 10px 0;">
+      現在キャンバスで組み立てたパーツの位置や文字、デザインがどのような「プログラム（HTML/CSS）」として生成されているかを確認できます。
+    </p>
+    <div class="code-container">
+      <div id="codeViewArea" class="code-block"></div>
+    </div>
+    <div style="margin-top:10px; display:flex; gap:10px;">
+      <button onclick="copyCodeToClipboard()" style="background:#10b981;">📋 コードをコピー</button>
+      <button onclick="downloadHTML()" style="background:#3b82f6;">💾 HTMLファイルとして保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const c = document.getElementById('canvas');
+const zoomWrapper = document.getElementById('zoomWrapper');
+const workArea = document.getElementById('work');
+
+const tc = document.getElementById('tc');
+const bc = document.getElementById('bc');
+const bg = document.getElementById('bg');
+const fs = document.getElementById('fs');
+const fontSelect = document.getElementById('fontSelect');
+const borderStyleSelect = document.getElementById('borderStyleSelect');
+const borderWidthInput = document.getElementById('borderWidthInput');
+const elemWidth = document.getElementById('elemWidth');
+const elemHeight = document.getElementById('elemHeight');
+
+let selectedItem = null;
+let history = [];
+let historyIndex = -1;
+let isTransparentBorder = false;
+let isTransparentBg = true;
+
+let currentScale = 1.0;
+
+function toggleAccordion(header) {
+  const group = header.parentElement;
+  group.classList.toggle('collapsed');
+}
+
+function toggleSidebar() {
+  const body = document.body;
+  const btn = document.getElementById('sidebarToggleBtn');
+  body.classList.toggle('sidebar-closed');
+  
+  if (body.classList.contains('sidebar-closed')) {
+    btn.innerText = '▶ ツールを開く';
+  } else {
+    btn.innerText = '◀ サイドバーを閉じる';
+  }
+}
+
+function showHelpModal() { document.getElementById('helpModal').style.display = 'block'; }
+function hideHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
+
+function showImageHowToModal() { document.getElementById('imageHowToModal').style.display = 'block'; }
+function hideImageHowToModal() { document.getElementById('imageHowToModal').style.display = 'none'; }
+
+function showOtherSaveModal() { document.getElementById('otherSaveModal').style.display = 'block'; }
+function hideOtherSaveModal() { document.getElementById('otherSaveModal').style.display = 'none'; }
+
+// Google画像検索を別タブで開く
+function openGoogleImageSearch() {
+  window.open('https://www.google.co.jp/imghp', '_blank');
+}
+
+// 生徒情報変更時のバインド処理
+function onStudentInfoChange() {
+  updateFixedHeader();
+  checkStudentInfoInputs();
+}
+
+// 生徒情報が埋まっているか判定しボタンの有効/無効切り替え
+function checkStudentInfoInputs() {
+  const g = document.getElementById('studentGrade').value.trim();
+  const cNum = document.getElementById('studentClassNum').value.trim();
+  const num = document.getElementById('studentNumber').value.trim();
+  const name = document.getElementById('studentName').value.trim();
+
+  const isComplete = (g !== '' && cNum !== '' && num !== '' && name !== '');
+  const reqElements = document.querySelectorAll('.req-info');
+  const notice = document.getElementById('infoNotice');
+
+  reqElements.forEach(el => {
+    el.disabled = !isComplete;
+  });
+
+  if (isComplete) {
+    notice.style.display = 'none';
+  } else {
+    notice.style.display = 'block';
+  }
+}
+
+/* 
+  ======================================================
+  アイコンリスト
+  ======================================================
+*/
+const rawIcons = {
+  basic: [
+    '⭐','🌟','✨','❤️','💔','👍','👎','👏','✅','❌','⭕','❓','❗','🔔','📌','📍','🔍','🔒','🔓','🔑','⚙️','💡','📷','⏰','⌛','📅','📁','📄','📝','🗑️','✏️','✂️'
+  ],
+  web: [
+    '📞','📧','✉️','📮','🌐','💻','🖥️','📱','🎙️','🎧','📻','📺','🔋','🔌','📡','⌨️','🖱️','💾','💿','☁️'
+  ],
+  biz: [
+    '💼','📊','📈','📉','💰','💴','💵','💳','💎','⚖️','🏢','🏪','🏭','🛒','👜','🏷️','🎯','🏆','🥇','🥈','🥉','📜','📋'
+  ],
+  nature: [
+    '☀️','🌙','⛅','☁️','🌧️','❄️','⚡','🔥','💧','🌊','🌸','🌹','🌻','🍁','🍃','🌴','🍎','🍓','🍌','🍕','🍔','🍟','☕','🍵','🍺'
+  ],
+  vehicle: [
+    '🚗','🚕','🚌','🚚','🚑','🚒','🚲','🏍️','✈️','🚀','🚁','🚢','🏠','🏫','🏥','🗼','⛩️'
+  ],
+  symbol: [
+    '🔴','🔵','🟡','🟢','🟣','🟠','⬛','⬜','🔷','🔺','🔻','➔','➡️','⬅️','⬆️','⬇️','🔄','➕','➖','✖️','🚫','⚠️'
+  ],
+  face: [
+    '😀','😃','😄','😁','😆','😅','😂','😊','😇','🙂','😉','😌','😍','🥰','😘','😋','😜','😝','🤑','🤗','🤔','🤐','😏','😒','🙄','😬','😔','😴','😷','🤒','🤕','🤯','🤠','🥳','😎','🤓','🧐','😟','😮','😳'
+  ],
+  sport: [
+    '⚽','⚾','🏀','🏐','🏈','🎾','🎳','🏸','🥊','🥋','⛳','⛸️','🎣','🎿','🎯','🎱','🎮','🎲','♟️','🎨','🎬','🎤','🎧','🎵','🎷','🎸','🎹','🎺','🎻','🥁'
+  ]
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Delete' && selectedItem) {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    if (active && active.isContentEditable) {
+      const sel = window.getSelection();
+      if (sel && sel.toString().length > 0) return;
+    }
+    e.preventDefault();
+    delE();
+  }
+});
+
+function updateFixedHeader() {
+  const g = document.getElementById('studentGrade').value.trim();
+  const cNum = document.getElementById('studentClassNum').value.trim();
+  const num = document.getElementById('studentNumber').value.trim();
+  const name = document.getElementById('studentName').value.trim();
+  
+  let headerEl = document.getElementById('fixedHeader');
+  if (!headerEl) {
+    headerEl = document.createElement('div');
+    headerEl.id = 'fixedHeader';
+    c.appendChild(headerEl);
+  }
+  
+  let parts = [];
+  if (g) parts.push(`${g}年`);
+  if (cNum) parts.push(`${cNum}組`);
+  if (num) parts.push(`${num}番`);
+  if (name) parts.push(name);
+  
+  headerEl.innerText = parts.join(' ');
+  saveToLocalStorage();
+}
+
+function getExportFilename(defaultName, extension) {
+  const g = document.getElementById('studentGrade').value.trim();
+  const cNum = document.getElementById('studentClassNum').value.trim();
+  const num = document.getElementById('studentNumber').value.trim();
+  const name = document.getElementById('studentName').value.trim();
+  
+  let prefix = [];
+  if (g || cNum || num) {
+    prefix.push(`${g || 0}-${cNum || 0}-${num || 0}`);
+  }
+  if (name) prefix.push(name);
+  
+  let finalPrefix = prefix.join('_');
+  if (finalPrefix) {
+    return `${finalPrefix}_${defaultName}.${extension}`;
+  }
+  return `${defaultName}.${extension}`;
+}
+
+function saveState() {
+  if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
+  history.push({
+    html: c.innerHTML,
+    w: c.style.width,
+    h: c.style.height
+  });
+  historyIndex++;
+  saveToLocalStorage();
+}
+
+function undo() {
+  if (historyIndex > 0) {
+    historyIndex--;
+    const state = history[historyIndex];
+    c.innerHTML = typeof state === 'string' ? state : state.html;
+    if (state.w) c.style.width = state.w;
+    if (state.h) c.style.height = state.h;
+    deselectAll();
+    rebindItems();
+    updateFixedHeader();
+    saveToLocalStorage();
+  }
+}
+
+function redo() {
+  if (historyIndex < history.length - 1) {
+    historyIndex++;
+    const state = history[historyIndex];
+    c.innerHTML = typeof state === 'string' ? state : state.html;
+    if (state.w) c.style.width = state.w;
+    if (state.h) c.style.height = state.h;
+    deselectAll();
+    rebindItems();
+    updateFixedHeader();
+    saveToLocalStorage();
+  }
+}
+
+function deselectAll() {
+  document.querySelectorAll('.item').forEach(el => el.classList.remove('selected'));
+  selectedItem = null;
+  elemWidth.value = '';
+  elemHeight.value = '';
+}
+
+function clearAllCanvas() {
+  if (confirm('右上の「生徒情報」以外のすべてのパーツを削除し、初期状態にリセットしますか？')) {
+    const items = c.querySelectorAll('.item');
+    items.forEach(item => item.remove());
+    deselectAll();
+    setupDefaultCanvas();
+    saveState();
+  }
+}
+
+c.addEventListener('click', (e) => {
+  if (e.target === c) deselectAll();
+});
+
+function createItem(contentHTML, left=100, top=100, width=200, height=100, isIcon=false, initialBg='transparent', borderStyle='none', borderWidth='4px', borderColor='#000000') {
+  const item = document.createElement('div');
+  item.className = 'item' + (isIcon ? ' icon-item' : '');
+  item.style.left = left + 'px';
+  item.style.top = top + 'px';
+  if(width) item.style.width = width + 'px';
+  if(height) item.style.height = height + 'px';
+  
+  item.style.backgroundColor = initialBg;
+  item.style.borderStyle = borderStyle;
+  item.style.borderWidth = borderWidth;
+  item.style.borderColor = borderColor;
+  
+  item.innerHTML = contentHTML + `
+    <div class="resize-handle" title="ドラッグで拡大・縮小"></div>
+    <div class="move-handle" title="ドラッグで移動"></div>
+    <div class="rotate-handle" title="ドラッグで回転">↻</div>
+  `;
+
+  c.appendChild(item);
+  bindItemEvents(item);
+  selectItem(item);
+  saveState();
+  return item;
+}
+
+function bindItemEvents(item) {
+  const getXY = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+  };
+
+  const editable = item.querySelector('[contenteditable="true"]');
+  if (editable) {
+    editable.addEventListener('input', () => saveState());
+  }
+
+  const startDrag = (e) => {
+    if (e.target.classList.contains('resize-handle') || e.target.classList.contains('rotate-handle')) return;
+
+    if (e.target.isContentEditable || e.target.closest('[contenteditable="true"]')) {
+      selectItem(item);
+      return; 
+    }
+    
+    const pos = getXY(e);
+    let startX = pos.x;
+    let startY = pos.y;
+    let initialLeft = item.offsetLeft;
+    let initialTop = item.offsetTop;
+    let isDragging = false;
+
+    selectItem(item);
+
+    const move = (ev) => {
+      if (ev.touches && ev.touches.length > 1) return;
+      const mPos = getXY(ev);
+      let dx = (mPos.x - startX) / currentScale;
+      let dy = (mPos.y - startY) / currentScale;
+
+      if (!isDragging && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+        isDragging = true;
+        if (editable) editable.blur();
+      }
+
+      if (isDragging) {
+        if (ev.cancelable) ev.preventDefault();
+        item.style.left = (initialLeft + dx) + 'px';
+        item.style.top = (initialTop + dy) + 'px';
+      }
+    };
+
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', up);
+      if (isDragging) {
+        saveState();
+      }
+    };
+
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+    document.addEventListener('touchmove', move, { passive: false });
+    document.addEventListener('touchend', up);
+  };
+
+  item.addEventListener('mousedown', startDrag);
+  item.addEventListener('touchstart', startDrag, { passive: true });
+
+  const rh = item.querySelector('.resize-handle');
+  if (rh) {
+    const startResize = (e) => {
+      e.stopPropagation();
+      const pos = getXY(e);
+      let startW = item.offsetWidth;
+      let startH = item.offsetHeight;
+      let startX = pos.x;
+      let startY = pos.y;
+
+      const resize = (ev) => {
+        if (ev.touches && ev.touches.length > 1) return;
+        const mPos = getXY(ev);
+        let w = startW + (mPos.x - startX) / currentScale;
+        let h = startH + (mPos.y - startY) / currentScale;
+        if (w > 10) item.style.width = w + 'px';
+        if (h > 10) item.style.height = h + 'px';
+        
+        if (item.classList.contains('icon-item')) {
+          let newFS = Math.min(w, h);
+          item.style.fontSize = newFS + 'px';
+          const iconContent = item.querySelector('.icon-content');
+          if (iconContent) iconContent.style.fontSize = newFS + 'px';
+          fs.value = Math.round(newFS);
+        }
+        
+        elemWidth.value = Math.round(item.offsetWidth);
+        elemHeight.value = Math.round(item.offsetHeight);
+      };
+
+      const up = () => {
+        document.removeEventListener('mousemove', resize);
+        document.removeEventListener('mouseup', up);
+        document.removeEventListener('touchmove', resize);
+        document.removeEventListener('touchend', up);
+        saveState();
+      };
+
+      document.addEventListener('mousemove', resize);
+      document.addEventListener('mouseup', up);
+      document.addEventListener('touchmove', resize, { passive: false });
+      document.addEventListener('touchend', up);
+    };
+
+    rh.addEventListener('mousedown', startResize);
+    rh.addEventListener('touchstart', startResize, { passive: false });
+  }
+
+  const rot = item.querySelector('.rotate-handle');
+  if (rot) {
+    const startRotate = (e) => {
+      e.stopPropagation();
+      let rect = item.getBoundingClientRect();
+      let cx = rect.left + rect.width / 2;
+      let cy = rect.top + rect.height / 2;
+
+      const rotate = (ev) => {
+        const mPos = getXY(ev);
+        let rad = Math.atan2(mPos.y - cy, mPos.x - cx);
+        let deg = rad * (180 / Math.PI);
+        item.style.transform = `rotate(${deg}deg)`;
+      };
+
+      const up = () => {
+        document.removeEventListener('mousemove', rotate);
+        document.removeEventListener('mouseup', up);
+        document.removeEventListener('touchmove', rotate);
+        document.removeEventListener('touchend', up);
+        saveState();
+      };
+
+      document.addEventListener('mousemove', rotate);
+      document.addEventListener('mouseup', up);
+      document.addEventListener('touchmove', rotate, { passive: false });
+      document.addEventListener('touchend', up);
+    };
+
+    rot.addEventListener('mousedown', startRotate);
+    rot.addEventListener('touchstart', startRotate, { passive: false });
+  }
+}
+
+let initialPinchDist = null;
+let initialScale = 1.0;
+
+workArea.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    initialPinchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    initialScale = currentScale;
+  }
+}, { passive: true });
+
+workArea.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && initialPinchDist) {
+    if (e.cancelable) e.preventDefault();
+    const currentDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const zoomFactor = currentDist / initialPinchDist;
+    currentScale = Math.min(Math.max(0.3, initialScale * zoomFactor), 3.0);
+    zoomWrapper.style.transform = `scale(${currentScale})`;
+  }
+}, { passive: false });
+
+workArea.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) {
+    initialPinchDist = null;
+  }
+});
+
+function rebindItems() {
+  document.querySelectorAll('.item').forEach(item => bindItemEvents(item));
+}
+
+function selectItem(item) {
+  deselectAll();
+  selectedItem = item;
+  item.classList.add('selected');
+  elemWidth.value = Math.round(item.offsetWidth);
+  elemHeight.value = Math.round(item.offsetHeight);
+  
+  let currentFS = parseInt(window.getComputedStyle(item).fontSize);
+  if(currentFS) fs.value = currentFS;
+
+  let bStyle = item.style.borderStyle || 'none';
+  borderStyleSelect.value = bStyle;
+
+  let bWidth = parseInt(item.style.borderWidth) || 4;
+  borderWidthInput.value = bWidth;
+
+  let currentBg = item.style.backgroundColor;
+  isTransparentBg = (!currentBg || currentBg === 'transparent' || currentBg === 'rgba(0, 0, 0, 0)');
+  
+  let currentBorder = item.style.borderColor;
+  isTransparentBorder = (bStyle === 'none' || !currentBorder || currentBorder === 'transparent' || currentBorder === 'rgba(0, 0, 0, 0)');
+}
+
+function addTitle() { createItem('<div contenteditable="true" style="font-size:32px; font-weight:bold; text-align:center;">タイトル</div>', 10, 70, 770, 80, false, 'transparent', 'double', '6px', '#000000'); }
+function addText() { createItem('<div contenteditable="true" style="font-size:16px;">ここに文章を入力してください。</div>', 10, 170, 300, 80, false, 'transparent', 'none', '2px', '#000000'); }
+function addTextV() { createItem('<div contenteditable="true" class="vertical-text" style="font-size:16px;">ここに縦書きの文章を入力してください。</div>', 100, 260, 80, 300, false, 'transparent', 'none', '2px', '#000000'); }
+function addBox() { createItem('<div contenteditable="true" style="font-size:16px; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">文字入力</div>', 100, 260, 150, 150, false, 'transparent', 'solid', '2px', '#000000'); }
+
+function addCircle() { 
+  let item = createItem('<div contenteditable="true" style="font-size:16px; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">文字入力</div>', 100, 260, 150, 150, false, 'transparent', 'solid', '2px', '#000000');
+  item.style.borderRadius = '50%';
+}
+
+function addLine() { createItem('', 100, 260, 200, 4, false, '#000000', 'none', '0px', 'transparent'); }
+
+function addQR() {
+  let url = prompt('QRコードに変換するURLを入力してください:', '');
+  if (url === null) return;
+  url = url.trim();
+  if (!url) {
+    alert('URLを入力してください。');
+    return;
+  }
+  
+  let qrContainer = document.createElement('div');
+  qrContainer.style.width = '100%';
+  qrContainer.style.height = '100%';
+  
+  new QRCode(qrContainer, {
+    text: url,
+    width: 150,
+    height: 150,
+    colorDark: "#000000",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.H
+  });
+  
+  setTimeout(() => {
+    let img = qrContainer.querySelector('img');
+    if (img) {
+      createItem(`<img src="${img.src}">`, 100, 260, 150, 150, false, 'transparent', 'none', '0px', 'transparent');
+    }
+  }, 100);
+}
+
+function applySize() {
+  if (!selectedItem) return;
+  if (elemWidth.value) selectedItem.style.width = elemWidth.value + 'px';
+  if (elemHeight.value) selectedItem.style.height = elemHeight.value + 'px';
+  saveState();
+}
+
+function onBorderStyleChange() {
+  if (borderStyleSelect.value !== 'none') isTransparentBorder = false;
+  applyStyle();
+}
+
+function onBorderColorChange() {
+  isTransparentBorder = false;
+  if (borderStyleSelect.value === 'none') borderStyleSelect.value = 'solid';
+  applyStyle();
+}
+
+function onBgColorChange() {
+  isTransparentBg = false;
+  applyStyle();
+}
+
+function applyStyle() {
+  if (!selectedItem) return;
+  
+  const sel = window.getSelection();
+  const hasTextSelection = sel && sel.toString().length > 0 && selectedItem.contains(sel.anchorNode);
+
+  if (hasTextSelection) {
+    document.execCommand('foreColor', false, tc.value);
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.style.fontSize = fs.value + 'px';
+    span.style.fontFamily = fontSelect.value;
+    try {
+      range.surroundContents(span);
+    } catch(e) {
+      document.execCommand('fontSize', false, '7');
+      let fontEls = selectedItem.querySelectorAll('font[size="7"]');
+      fontEls.forEach(f => {
+        f.removeAttribute('size');
+        f.style.fontSize = fs.value + 'px';
+        f.style.fontFamily = fontSelect.value;
+      });
+    }
+  } else {
+    selectedItem.style.fontFamily = fontSelect.value;
+    selectedItem.style.fontSize = fs.value + 'px';
+    selectedItem.style.color = tc.value;
+
+    if (selectedItem.classList.contains('icon-item')) selectedItem.style.fontSize = fs.value + 'px';
+
+    const iconContent = selectedItem.querySelector('.icon-content');
+    if(iconContent) {
+      iconContent.style.fontSize = fs.value + 'px';
+      iconContent.style.color = tc.value;
+    }
+    
+    let editable = selectedItem.querySelector('[contenteditable="true"]');
+    if(editable) {
+      editable.style.fontSize = fs.value + 'px';
+      editable.style.color = tc.value;
+      editable.style.fontFamily = fontSelect.value;
+      editable.querySelectorAll('*').forEach(child => {
+        child.style.fontSize = fs.value + 'px';
+        child.style.fontFamily = fontSelect.value;
+        child.style.color = tc.value;
+      });
+    }
+  }
+  
+  let borderStyle = borderStyleSelect.value;
+  let bw = parseInt(borderWidthInput.value) || 2;
+  
+  if (borderStyle === 'double' && bw < 3) {
+    bw = 4;
+    borderWidthInput.value = 4;
+  } else if ((borderStyle === 'groove' || borderStyle === 'ridge') && bw < 2) {
+    bw = 3;
+    borderWidthInput.value = 3;
+  }
+
+  if (isTransparentBorder || borderStyle === 'none') {
+    selectedItem.style.borderStyle = 'none';
+  } else {
+    selectedItem.style.borderStyle = borderStyle;
+    selectedItem.style.borderWidth = bw + 'px';
+    selectedItem.style.borderColor = bc.value;
+  }
+
+  selectedItem.style.backgroundColor = isTransparentBg ? 'transparent' : bg.value;
+  
+  let svgLines = selectedItem.querySelectorAll('svg line, svg polygon');
+  svgLines.forEach(el => {
+    if (el.hasAttribute('stroke')) el.setAttribute('stroke', tc.value);
+  });
+
+  saveState();
+}
+
+function setBorderTransparent() { 
+  isTransparentBorder = true; 
+  borderStyleSelect.value = 'none';
+  applyStyle(); 
+}
+
+function setBgTransparent() { 
+  isTransparentBg = true; 
+  applyStyle(); 
+}
+
+function toggleBold() {
+  if (!selectedItem) return;
+  const sel = window.getSelection();
+  const hasTextSelection = sel && sel.toString().length > 0 && selectedItem.contains(sel.anchorNode);
+
+  if (hasTextSelection) {
+    document.execCommand('bold', false, null);
+  } else {
+    let editable = selectedItem.querySelector('[contenteditable="true"]') || selectedItem;
+    const isBold = editable.style.fontWeight === 'bold' || selectedItem.style.fontWeight === 'bold';
+    const newWeight = isBold ? 'normal' : 'bold';
+    
+    selectedItem.style.fontWeight = newWeight;
+    editable.style.fontWeight = newWeight;
+    editable.querySelectorAll('*').forEach(el => el.style.fontWeight = newWeight);
+  }
+  saveState();
+}
+
+function toggleDecoration(styleType) {
+  if (!selectedItem) return;
+  const sel = window.getSelection();
+  const hasTextSelection = sel && sel.toString().length > 0 && selectedItem.contains(sel.anchorNode);
+
+  let styleValue = 'underline';
+  if (styleType === 'double') styleValue = 'underline double';
+  if (styleType === 'wavy') styleValue = 'underline wavy';
+
+  if (hasTextSelection) {
+    const range = sel.getRangeAt(0);
+    const parentNode = range.commonAncestorContainer.parentElement;
+    if (parentNode && parentNode.tagName === 'SPAN' && parentNode.style.textDecoration.includes('underline')) {
+      parentNode.style.textDecoration = 'none';
+    } else {
+      const span = document.createElement('span');
+      span.style.textDecoration = styleValue;
+      try {
+        range.surroundContents(span);
+      } catch(e) {
+        document.execCommand('underline', false, null);
+      }
+    }
+  } else {
+    let editable = selectedItem.querySelector('[contenteditable="true"]') || selectedItem;
+    let currentDeco = editable.style.textDecoration || selectedItem.style.textDecoration;
+
+    if (currentDeco && currentDeco !== 'none' && currentDeco.includes(styleType === 'underline' ? 'underline' : styleType)) {
+      editable.style.textDecoration = 'none';
+      selectedItem.style.textDecoration = 'none';
+      editable.querySelectorAll('*').forEach(el => el.style.textDecoration = 'none');
+    } else {
+      editable.style.textDecoration = styleValue;
+      selectedItem.style.textDecoration = styleValue;
+      editable.querySelectorAll('*').forEach(el => el.style.textDecoration = styleValue);
+    }
+  }
+  saveState();
+}
+
+function alignT(align) {
+  if (!selectedItem) return;
+  selectedItem.style.textAlign = align;
+  saveState();
+}
+
+function front() { if(selectedItem) { c.appendChild(selectedItem); saveState(); } }
+function back() { if(selectedItem) { c.insertBefore(selectedItem, c.firstChild); saveState(); } }
+
+function copyE() {
+  if (!selectedItem) return;
+  let clone = selectedItem.cloneNode(true);
+  clone.style.left = (parseInt(selectedItem.style.left) + 20) + 'px';
+  clone.style.top = (parseInt(selectedItem.style.top) + 20) + 'px';
+  clone.classList.remove('selected');
+  c.appendChild(clone);
+
+  const oldRh = clone.querySelector('.resize-handle');
+  const oldMv = clone.querySelector('.move-handle');
+  const oldRot = clone.querySelector('.rotate-handle');
+  if (oldRh) oldRh.remove();
+  if (oldMv) oldMv.remove();
+  if (oldRot) oldRot.remove();
+
+  const rh = document.createElement('div');
+  rh.className = 'resize-handle';
+  rh.title = 'ドラッグで拡大・縮小';
+  const mv = document.createElement('div');
+  mv.className = 'move-handle';
+  mv.title = 'ドラッグで移動';
+  const rot = document.createElement('div');
+  rot.className = 'rotate-handle';
+  rot.title = 'ドラッグで回転';
+  rot.innerText = '↻';
+
+  clone.appendChild(rh);
+  clone.appendChild(mv);
+  clone.appendChild(rot);
+
+  bindItemEvents(clone);
+  selectItem(clone);
+  saveState();
+}
+
+function delE() { if(selectedItem) { selectedItem.remove(); deselectAll(); saveState(); } }
+
+function showIcons() {
+  document.getElementById('iconModal').style.display = 'block';
+  filterIcons('all', document.querySelector('.tab-btn'));
+}
+function hideIcons() { document.getElementById('iconModal').style.display = 'none'; }
+
+function filterIcons(cat, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const area = document.getElementById('iconArea');
+  area.innerHTML = '';
+  
+  let icons = [];
+  if (cat === 'all') {
+    Object.values(rawIcons).forEach(arr => icons.push(...arr));
+  } else if (rawIcons[cat]) {
+    icons = rawIcons[cat];
+  }
+  
+  icons.forEach(icon => {
+    let card = document.createElement('div');
+    card.className = 'icon-card';
+    card.innerText = icon;
+    card.onclick = () => {
+      createItem(`<div class="icon-content" style="font-size:60px;">${icon}</div>`, 100, 260, 80, 80, true, 'transparent', 'none', '0px', 'transparent');
+      hideIcons();
+    };
+    area.appendChild(card);
+  });
+}
+
+function generateFullHTML() {
+  deselectAll();
+  let cloneCanvas = c.cloneNode(true);
+  cloneCanvas.querySelectorAll('.resize-handle, .move-handle, .rotate-handle').forEach(h => h.remove());
+  
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>作成したWebページ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=M+PLUS+Rounded+1c:wght@500;800&family=Noto+Sans+JP:wght@400;700&family=Noto+Serif+JP:wght@500;700&family=Yuji+Syuku&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; padding:20px; background:#f1f5f9; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+  .page { position:relative; width:794px; height:1123px; background:#ffffff; box-shadow:0 10px 25px rgba(0,0,0,0.1); overflow:hidden; border-radius:8px; }
+  .item { position:absolute; box-sizing:border-box; }
+  .item [contenteditable="true"] { background:transparent !important; }
+  .item.icon-item { display:flex; align-items:center; justify-content:center; line-height:1; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif !important; }
+  .item.icon-item .icon-content { display:flex; align-items:center; justify-content:center; width:100%; height:100%; line-height:1; }
+  .item img { width:100%; height:100%; object-fit:contain; }
+  .item svg { width:100%; height:100%; display:block; }
+  .vertical-text { writing-mode: vertical-rl; text-orientation: upright; }
+  #fixedHeader { position:absolute; top:20px; right:25px; font-size:20px; font-weight:bold; color:#000000; font-family:Meiryo, sans-serif; text-align:right; line-height:1.2; }
+</style>
+</head>
+<body>
+<div class="page">
+${cloneCanvas.innerHTML}
+</div>
+</body>
+</html>`;
+}
+
+function showCodeModal() {
+  const modal = document.getElementById('codeModal');
+  const view = document.getElementById('codeViewArea');
+  view.textContent = generateFullHTML();
+  modal.style.display = 'block';
+}
+
+function hideCodeModal() { document.getElementById('codeModal').style.display = 'none'; }
+
+function copyCodeToClipboard() {
+  let code = document.getElementById('codeViewArea').textContent;
+  navigator.clipboard.writeText(code).then(() => alert('コードをコピーしました！'));
+}
+
+function downloadHTML() {
+  let htmlContent = generateFullHTML();
+  let blob = new Blob([htmlContent], {type: 'text/html;charset=utf-8'});
+  let a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = getExportFilename('index', 'html');
+  a.click();
+}
+
+function saveToFile() {
+  let projectData = {
+    canvasWidth: '794px',
+    canvasHeight: '1123px',
+    studentGrade: document.getElementById('studentGrade').value,
+    studentClassNum: document.getElementById('studentClassNum').value,
+    studentNumber: document.getElementById('studentNumber').value,
+    studentName: document.getElementById('studentName').value,
+    html: c.innerHTML
+  };
+  let blob = new Blob([JSON.stringify(projectData)], {type: 'application/json'});
+  let a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = getExportFilename('project', 'hpb');
+  a.click();
+}
+
+function loadFromFile(e) {
+  let file = e.target.files[0];
+  if (!file) return;
+  let reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      let data = JSON.parse(ev.target.result);
+      if (data && data.html) {
+        c.innerHTML = data.html;
+        c.style.width = '794px';
+        c.style.height = '1123px';
+        
+        if (data.studentGrade !== undefined) document.getElementById('studentGrade').value = data.studentGrade;
+        if (data.studentClassNum !== undefined) document.getElementById('studentClassNum').value = data.studentClassNum;
+        if (data.studentNumber !== undefined) document.getElementById('studentNumber').value = data.studentNumber;
+        if (data.studentName !== undefined) document.getElementById('studentName').value = data.studentName;
+      } else {
+        c.innerHTML = ev.target.result;
+      }
+    } catch (err) {
+      c.innerHTML = ev.target.result;
+    }
+    deselectAll();
+    rebindItems();
+    onStudentInfoChange();
+    saveState();
+  };
+  reader.readAsText(file);
+}
+
+function pdfOut() {
+  deselectAll();
+  const prevScale = currentScale;
+  zoomWrapper.style.transform = 'scale(1)';
+  
+  const originalTitle = document.title;
+  const pdfName = getExportFilename('project', 'pdf').replace('.pdf', '');
+  document.title = pdfName;
+  
+  window.print();
+  
+  document.title = originalTitle;
+  zoomWrapper.style.transform = `scale(${prevScale})`;
+}
+
+// デフォルト状態（タイトル＋文章配置）のセットアップ
+function setupDefaultCanvas() {
+  addTitle();
+  addText();
+  deselectAll();
+}
+
+/* --- 自動保存・自動復元処理 --- */
+const LOCAL_STORAGE_KEY = 'hp_builder_autosave_data';
+
+function saveToLocalStorage() {
+  try {
+    const data = {
+      canvasWidth: '794px',
+      canvasHeight: '1123px',
+      studentGrade: document.getElementById('studentGrade').value,
+      studentClassNum: document.getElementById('studentClassNum').value,
+      studentNumber: document.getElementById('studentNumber').value,
+      studentName: document.getElementById('studentName').value,
+      html: c.innerHTML,
+      history: history,
+      historyIndex: historyIndex
+    };
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('LocalStorage save failed', e);
+  }
+}
+
+function loadFromLocalStorage() {
+  try {
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!saved) return false;
+    const data = JSON.parse(saved);
+    if (data && data.html) {
+      c.innerHTML = data.html;
+      c.style.width = '794px';
+      c.style.height = '1123px';
+      if (data.studentGrade !== undefined) document.getElementById('studentGrade').value = data.studentGrade;
+      if (data.studentClassNum !== undefined) document.getElementById('studentClassNum').value = data.studentClassNum;
+      if (data.studentNumber !== undefined) document.getElementById('studentNumber').value = data.studentNumber;
+      if (data.studentName !== undefined) document.getElementById('studentName').value = data.studentName;
+      
+      if (data.history && Array.isArray(data.history) && data.history.length > 0) {
+        history = data.history;
+        historyIndex = data.historyIndex !== undefined ? data.historyIndex : history.length - 1;
+      }
+      return true;
+    }
+  } catch (e) {
+    console.error('LocalStorage load failed', e);
+  }
+  return false;
+}
+
+// 初期化
+if (loadFromLocalStorage()) {
+  deselectAll();
+  rebindItems();
+  onStudentInfoChange();
+} else {
+  setupDefaultCanvas();
+  onStudentInfoChange();
+}
+</script>
+</body>
+</html>
